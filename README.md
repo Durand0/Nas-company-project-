@@ -29,43 +29,81 @@ to ensure the visibility and auditing of NAS' internal application.
 Prerequisites : 
 
 Resources required for this project
--Iam  group
+
+-Iam group
+
 -Iam user
+
 -Managed policy
+
 -VPC
--Internet gateway 
+
+-Internet gateway
+
 -Nat gateway
--Public subnet (2) 
--Private subnet (2) 
+
+-Public subnet (2)
+
+-Private subnet (2)
+
 -Public route table
+
 -Private route table
+
 -Security groups (5)
+
 -KeyName
+
 -Ec2 instance profile
+
 -Ec2 instance ssm role
+
 -Launch template (2)
+
 -Auto scaling (2)
+
 -Load balancer
+
 -Listener
+
 -Target group
--Route 53 (2) 
+
+-Route 53 (2)
+
 -Host Zone
+
 -Cloudfront distribution
+
 -S3 bucket
+
 -Cloudfront origin
+
 -Bucket policy
+
 -Certificate
+
 -KMS key
+
 -EFS
+
 -Mount target (2)
+
 -Scaling up policy
+
 -Scaling down policy
+
 -Cloudwatch alarm for high CPU utilization
+
 -Cloudwatch alarm for low CPU utilization
+
 -Sns topic
+
 -Sns subscription
+
 -Database
+
 -Backup vault
+
 -Backup plan
 -Backup selection
 -Backup IAM role
