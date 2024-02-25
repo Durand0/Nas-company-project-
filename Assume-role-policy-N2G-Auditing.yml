@@ -5,7 +5,7 @@ Resources:
   UserPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: user1-Assume-Role-From-user2-Account
+      PolicyName: N2G-Auditing-Assume-Role-From-Nas-financial
       PolicyDocument:
         Version: 2012-10-17
         Statement:
