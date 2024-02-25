@@ -14,6 +14,7 @@ As a result:
 *NAS Financial Group security team 
 
 *NAS Financial Group operations team 
+
 Each group has specific tasks.
 
 2) CloudSpace's consulting engineers are to create a dynamic, secure, high-availability website that is accessible to the public.
