@@ -11,7 +11,7 @@ Resources:
         Statement:
           - Effect: Allow
             Action: sts:AssumeRole
-            Resource: arn:aws:iam::user1-accountID:Role-name # (after the account ID it is the role name given by user1)
+            Resource: arn:aws:iam::Nas-financial-accountID:N2G-Auditing-Role # (after the account ID it is the role name given by user1)
       Principal:
         AWS:
-          - arn:aws:iam::user2-accountID:name of the account of user2 # (after the account ID put the user name of this account)
+          - arn:aws:iam::N2G-Auditing-accountID:N2G-Auditing-account-name  # (after the account ID put the user name of this account)
