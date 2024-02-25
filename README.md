@@ -19,9 +19,12 @@ Each group has specific tasks.
 
 2) CloudSpace's consulting engineers are to create a dynamic, secure, high-availability website that is accessible to the public.
 
-3) Build a dynamic application that is not accessible to the public (intranet).
+*Because of GDPR compliance only USA customers should be able to access the dynamic
+website, but users in Europe and other continent should land on a static website
 
-4) NAS Financial Group recently hired an auditing firm called N2G Auditing to 
+4) Build a dynamic application that is not accessible to the public (intranet).
+
+5) NAS Financial Group recently hired an auditing firm called N2G Auditing to 
 to ensure the visibility and auditing of NAS' internal application.
  
 **Getting started:**
