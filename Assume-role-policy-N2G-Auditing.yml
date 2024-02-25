@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Resources:
+
+  UserPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: user1-Assume-Role-From-user2-Account
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Resource: arn:aws:iam::user1-accountID:Role-name # (after the account ID it is the role name given by user1)
+      Principal:
+        AWS:
+          - arn:aws:iam::user2-accountID:name of the account of user2 # (after the account ID put the user name of this account)

@@ -1,0 +1,375 @@
+Resources:
+
+# Create A VPC 
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: xxxxxxx
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: Nas-vpc
+
+# Create Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Nas-igw
+
+# Attach Internet Gateway to VPC
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+# Create Public Subnet1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone:  # availability zone of your choise
+      CidrBlock: xxxxxxxx
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Nas-public-subnet1
+
+# Create A Public Subnet2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: # availability zone of your choise
+      CidrBlock: xxxxxxxxx
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Nas-public-subnet2
+
+# Create A Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Nas-public-route-table
+
+# Create A Public Route
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+# Associate Public Subnet1 with Public Route Table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+# Associate Public Subnet2 with Public Route Table
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+# Create A Private Subnet1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: # availability zone of your choise
+      CidrBlock: xxxxxxxx
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Nas-private-subnet1
+
+# Create A Private Subnet2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: # availability zone of your choise
+      CidrBlock: xxxxxxxxx
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Nas-private-subnet2
+
+# Create A Database Subnet1
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: # availability zone of your choise
+      CidrBlock: xxxxxxxxx
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Nas-Database-Subnet1
+
+# Create A Database Subnet2
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: # availability zone of your choise
+      CidrBlock: xxxxxxx
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Nas-Database-Subnet2
+
+# Creata A Database Subnet1 Route Table Association
+  DatabaseSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DatabaseSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+# Creata A Database Subnet2 Route Table Association
+  DatabaseSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DatabaseSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+# Create A Database Subnet Group
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Database Subnet Group
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+      Tags:
+        - Key: Name
+          Value: Nas-Database-Subnet-Group
+
+# Create A NAT Gateway
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: NAS-NAT-Gateway
+
+# Create A Elastic IP
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: Nas-eip
+
+# Create A Private Route Table
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Nas-private-route-table
+
+# Create A Private Route
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+# Associate Private Subnet1 with Private Route Table
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+# Associate Private Subnet2 with Private Route Table
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+# Create A Web Security Group
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: WebSecurityGroup
+      GroupDescription: Web Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref WebLoadBalancerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref WebLoadBalancerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: Nas-Web-SG
+
+# Create A Database Security Group
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: DatabaseSecurityGroup
+      GroupDescription: Database Security Group Should Allow WebSecurityGroup
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebSecurityGroup
+      Tags:
+        - Key: Name
+          Value: Nas-DB-SG
+
+
+# Create A Web Load Balancer Security Group
+  WebLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: WebLoadBalancerSecurityGroup
+      GroupDescription: Web Load Balancer Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: Nas-Web-LB-SG
+
+# Create A Security Group For Elastic File System
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EFSSecurityGroup
+      GroupDescription: EFS Security Group Should Allow WebSecurityGroup
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref WebSecurityGroup
+      Tags:
+        - Key: Name
+          Value: Nas-EFS-SG
+
+# Create a Intranet Security Group
+  IntranetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: IntranetSecurityGroup
+      GroupDescription: Intranet Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: xxxxxxxxx
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: xxxxxxxxx 
+      Tags:
+        - Key: Name
+          Value: Nas-Intranet-SG
+
+# Create Outputs
+
+Outputs:
+  VPC:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC
+  PublicSubnet1:
+    Description: Public Subnet 1
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnet1
+  PublicSubnet2:
+    Description: Public Subnet 2
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnet2
+  PrivateSubnet1:
+    Description: Private Subnet 1
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet1
+  PrivateSubnet2:
+    Description: Private Subnet 2
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet2
+  WebSecurityGroup:
+    Description: Web Security Group
+    Value: !Ref WebSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-WebSecurityGroup
+  DatabaseSecurityGroup:
+    Description: Database Security Group
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseSecurityGroup
+
+  WebLoadBalancerSecurityGroup:
+    Description: Web Load Balancer Security Group
+    Value: !Ref WebLoadBalancerSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-WebLoadBalancerSecurityGroup
+
+  EFSSecurityGroup:
+    Description: EFS Security Group
+    Value: !Ref EFSSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-EFSSecurityGroup
+
+  IntranetSecurityGroup:
+    Description: Intranet Security Group
+    Value: !Ref IntranetSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-IntranetSecurityGroup
+
+  DatabaseSubnet1:
+    Description: Database Subnet 1
+    Value: !Ref DatabaseSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseSubnet1
+
+  DatabaseSubnet2:
+    Description: Database Subnet 2
+    Value: !Ref DatabaseSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseSubnet2
+
+  DatabaseSubnetGroup:
+    Description: Database Subnet Group
+    Value: !Ref DatabaseSubnetGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseSubnetGroup

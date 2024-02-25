@@ -1,0 +1,570 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  This CloudFormation template creates an ssm role to acces my database.
+AWSTemplateFormatVersion: 2010-09-09
+Description: Provides Session Manager access without an Internet Gateway to an instance in a private subnet.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Configuration
+        Parameters:
+          - LatestAmiId
+          - InstanceType
+    ParameterLabels:
+      LatestAmiId:
+        default: Systems Manager Parameter for AMI
+      InstanceType:
+        default: EC2 Instance Type
+
+Parameters:
+  keyName:
+    Type: String
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    Default: xxxxxxx
+
+  DomainName:
+    Description: The primary FQDN of the website, it will also become the prefix for all Origin and Logging bucket names to ensure uniqueness and ease of identification.
+    Type: String
+    Default: nascompany.com
+
+
+# Systems Manager Parameter is used to find the latest Amazon Linux 2 AMI ID
+  # Amazon Linux 2 is preloaded with the SSM Agent
+  LatestAmiId:
+    Description: Region specific image from the Parameter Store
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Select a valid instance type for your Region
+    AllowedValues:
+    # add instance types to this list as desiredg
+    - t2.micro
+    - t3.micro
+    - m4.large
+    - m5.large
+
+Resources:
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2InstanceSSMRole
+  EC2InstanceSSMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        # The managed IAM policy AmazonSSMManagedInstanceCore grants access to Session Manager
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+# Create A Launch Template
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: WebServer
+      LaunchTemplateData:
+        ImageId: xxxxxxxxx
+        IamInstanceProfile: 
+          Arn: !GetAtt EC2InstanceProfile.Arn  
+        InstanceType: t2.micro
+        KeyName: !Ref keyName
+        SecurityGroupIds:
+          - !ImportValue Networking-WebSecurityGroup
+        UserData: !Base64 |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd php php-mysql
+          systemctl enable httpd
+          systemctl start httpd
+          echo "Hello Durand To the World from $(hostname -f)" > /var/www/html/index.html
+          cd /var/www/html
+          wget https://wordpress.org/latest.tar.gz
+          tar -xzf latest.tar.gz
+          cp -R wordpress/* /var/www/html/
+          rm -rf wordpress latest.tar.gz
+          chown -R apache:apache /var/www/html
+          chmod -R 755 /var/www/html
+          systemctl restart httpd
+        UserData: !Base64 | 
+          #!/bin/bash
+          yum update -y
+          yum install efs-utils -y
+          mkdir -p /var/www
+          mkdir -p /var/www/html
+          mount -t nfs ${MyEfsMountTarget.DnsName}:/ /var/www/html efs defaults,_netdev 0 0 
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: WebServer
+
+# Create A Intranet Launch Template
+  IntranetLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: Intranet-WebServer
+      LaunchTemplateData:
+        ImageId: xxxxxxx # imageId of Windows server
+        InstanceType: t2.micro
+        KeyName: !Ref keyName
+        SecurityGroupIds:
+          - !ImportValue Networking-IntranetSecurityGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: Intranet-WebServer
+
+# Create A Intranet Auto Scaling
+  IntranetAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: Intranet-WebServer
+      LaunchTemplate:
+        LaunchTemplateId: !Ref IntranetLaunchTemplate
+        Version: !GetAtt IntranetLaunchTemplate.LatestVersionNumber
+      MinSize: '1'
+      MaxSize: '1'
+      DesiredCapacity: '1'
+      VPCZoneIdentifier:
+        - !ImportValue Networking-PublicSubnet1
+        - !ImportValue Networking-PublicSubnet2
+          
+
+# Create A Target Group
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: Nas-target
+      Port: 443
+      Protocol: HTTPS 
+      VpcId: !ImportValue Networking-VPC
+
+
+# Create A Load Balancer
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: Nascompany
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - !ImportValue Networking-PublicSubnet1
+        - !ImportValue Networking-PublicSubnet2
+      SecurityGroups:
+        - !ImportValue Networking-WebSecurityGroup   
+
+# Create A Listener
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates: 
+            - CertificateArn: !Ref Certificate    
+      SecureListenerSetting:
+            CertificateSource: acm  
+
+# Create a default record set for cloudfront
+  DefaultRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: nascompany.com
+      SetIdentifier: Default
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.Id
+      HostedZoneId: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+      GeoLocation: 
+        CountryCode: default
+      Type: A
+      TTL: 300
+
+# Create a host zone
+  myHostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: nascompany.com
+      HostedZoneConfig:
+        Comment: "My Hosted Zone"
+      VPCs:
+        - VPCId: !ImportValue Networking-VPC
+          VPCRegion: !Ref AWS::Region
+      HostedZoneTags:
+        - Key: Name
+          Value: Web-app-HostedZone
+
+#Create a geolocation record set
+  rRoute53US:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: www.nascompany.com
+      SetIdentifier: US
+      ResourceRecords:
+        - !GetAtt LoadBalancer.DNSName
+      HostedZoneId: !Ref myHostedZone
+      GeoLocation:
+        CountryCode: 'US'
+      Type: CNAME
+      TTL: 300
+
+
+# Create CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DomainName
+        DefaultCacheBehavior:
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+          TargetOriginId: the-s3-bucket
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: index.html
+        CustomErrorResponses:
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        Enabled: true
+        HttpVersion: http2
+        Origins:
+          - DomainName: !Join ['', [!Ref Bucket, '.s3.amazonaws.com']]
+            Id: the-s3-bucket
+            S3OriginConfig:
+              OriginAccessIdentity:
+                !Join ['', ['origin-access-identity/cloudfront/', !Ref CloudFrontOriginAccessIdentity]]
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          MinimumProtocolVersion: TLSv1
+          SslSupportMethod: sni-only
+      Tags:
+        - Key: Domain
+          Value: !Ref DomainName
+
+
+# create a s3 bucket
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref DomainName
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+
+
+# Create a bucket policy
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Bucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:GetObject
+            Effect: Allow
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref Bucket, '/*']]
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+
+
+# Create a CloudFront Origin Access Identity
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Ref Bucket
+
+
+
+# Create a certificate
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName 
+      ValidationMethod: DNS
+
+
+# Create Elastic File System
+  EFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_30_DAYS
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+
+
+# Create Mount Target
+  MountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFS
+      SubnetId: !ImportValue Networking-PrivateSubnet1
+      SecurityGroups:
+        - !ImportValue Networking-EFSSecurityGroup
+
+# Create Mount Target
+  MountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFS
+      SubnetId: !ImportValue Networking-PrivateSubnet2
+      SecurityGroups:
+        - !ImportValue Networking-EFSSecurityGroup
+
+
+# Create A Auto Scaling Group
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: Nas-asg
+      DesiredCapacity: 2
+      HealthCheckGracePeriod: 300
+      HealthCheckType: ELB
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MaxSize: 4
+      MinSize: 2
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      VPCZoneIdentifier:
+        - !ImportValue Networking-PublicSubnet1
+        - !ImportValue Networking-PublicSubnet2
+
+# Create A Scaling Up Policy
+  ScalingUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      AdjustmentType: ChangeInCapacity
+      Cooldown: 80
+      ScalingAdjustment: 1
+
+# Create A Scaling Down Policy
+  ScalingDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      AdjustmentType: ChangeInCapacity
+      Cooldown: 40
+      ScalingAdjustment: -1
+
+# Create A Cpu High Alarm
+  CpuHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm when server CPU exceeds 80%
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: 
+        - !Ref ScalingUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      EvaluationPeriods: 2
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 60
+      Statistic: Average
+      Threshold: 80
+
+# Create A Cpu Low Alarm
+  CpuLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm when server CPU goes below 40%
+      ComparisonOperator: LessThanOrEqualToThreshold
+      AlarmActions: 
+        - !Ref ScalingDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      EvaluationPeriods: 2
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 60
+      Statistic: Average
+      Threshold: 40
+
+# Create A SNS Topic
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: # put a valid email address here
+          Protocol: email
+      TopicName: instan
+
+# Create A SNS Subscription
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: # put a valid email address here
+      Protocol: email
+      TopicArn: !Ref SNSTopic
+      
+# Create KMS Key
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS Key For Backup
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-default-1
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+            Action:
+              - kms:*
+            Resource: '*'
+ 
+# Create Data Base
+  DataBase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: MyDB
+      DBInstanceClass: db.t3.small
+      Engine: MySQL
+      MasterUsername: admin
+      MasterUserPassword: admin123
+      AllocatedStorage: 20
+      StorageType: gp2
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      MultiAZ: true
+      DBSubnetGroupName: !ImportValue Networking-DatabaseSubnetGroup
+      VPCSecurityGroups:
+        - !ImportValue Networking-DatabaseSecurityGroup
+      Tags:
+        - Key: Name
+          Value: DataBase
+
+
+# Create A Backup Vault
+  BackupVault:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: BackupVault
+      EncryptionKeyArn: !GetAtt KMSKey.Arn
+
+# Create A Backup Plan
+  BackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: default
+        BackupPlanRule:
+          - RuleName: daily-backups
+            TargetBackupVault: !Ref 'BackupVault'
+            ScheduleExpression: cron(0 5 ? * * *)
+            StartWindowMinutes: 60
+            Lifecycle:
+              MoveToColdStorageAfterDays: 30
+     
+ 
+
+
+# Create A Backup Selection
+  BackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupSelection:
+        IamRoleArn: !GetAtt BackupRole.Arn
+        ListOfTags:
+          - ConditionType: StringEquals
+            ConditionKey: Web-app-Instance
+            ConditionValue: daily
+        SelectionName: Web-app-Instance
+        Resources:
+          - arn:aws:rds:*:224028972441:db:web-app-database
+      BackupPlanId: !Ref BackupPlan
+
+# Create A Backup Role
+  BackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - backup.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+
+
+Outputs:
+  LoadBalancerDNS:
+    Description: The DNS name of the load balancer
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: Web-app-LoadBalancerDNS
+    
+
+  EC2InstanceProfile: 
+    Description: The EC2 Instance Profile
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: Web-app-EC2InstanceProfile
+
+  CloudFrontDistribution:
+    Description: The CloudFront Distribution
+    Value: !GetAtt CloudFrontDistribution.Id
+    Export:
+      Name: Web-app-CloudFrontDistribution
+
+  KMSKey:
+    Description: The KMS Key
+    Value: !GetAtt KMSKey.Arn
+    Export:
+      Name: Web-app-KMSKey
+
+  CloudFrontOriginAccessIdentity:
+    Description: The CloudFront Origin Access Identity
+    Value: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+    Export:
+      Name: Web-app-CloudFrontOriginAccessIdentity
+
+  BackupRole:
+    Description: The Backup Role
+    Value: !GetAtt BackupRole.Arn
+    Export:
+      Name: Web-app-BackupRole

@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  AccessToAccountId:
+    Type: String
+    Description: The ID of the second AWS account.
+    AllowedPattern: "[0-9]{12}"
+    ConstraintDescription: Must be a valid AWS account ID.
+    Default: 'ACCOUNT-ID-OF-N2G-AUDITING'
+Resources:
+  CrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: N2G-Auditing-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref IAMUser4
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: N2G-Auditing-Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - AWSTrustedAdvisorPriorityFullAccess:*
+                Resource: "*"
+
+
+# Create an iam user
+  IAMUser4:
+    Type: AWS::IAM::User
+    Properties:
+      Groups:
+        - N2G-Auditing
+      UserName: N2G-Auditing
+      LoginProfile:
+        Password: xxxxxxx
+        PasswordResetRequired: true
+
+# Create an iam group
+  IAMGroup4:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: N2G-Auditing
+      ManagedPolicyArns:
+        - !Ref CrossAccountRole
+
+# Add the user to the group
+  AddUserToGroup:
+    Type: AWS::IAM::UserToGroupAddition
+    Properties:
+      GroupName: !Ref IAMGroup4
+      Users:
+        - !Ref IAMUser4
