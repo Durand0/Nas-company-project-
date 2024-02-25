@@ -29,12 +29,11 @@ to ensure the visibility and auditing of NAS' internal application.
 Prerequisites : 
 
 Resources required for this project
-
 -Iam  group
 -Iam user
 -Managed policy
 -VPC
-- Internet gateway 
+-Internet gateway 
 -Nat gateway
 -Public subnet (2) 
 -Private subnet (2) 
