@@ -7,8 +7,7 @@ A company called NAS Financial Group currently runs its workloads on-premises an
 to migrate certain applications to the AWS Cloud Platform. It calls on CloudSpace Consulting engineers to design, implement and manage a solution that will meet its needs.
 As a result: 
 
-1) NAS Financial Group's AWS account must be accessible and managed by the following groups 
-following groups
+1) NAS Financial Group's AWS account must be accessible and managed by the following groups
 
 *CloudSpace engineers
 
