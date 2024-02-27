@@ -9,11 +9,13 @@ They hire CloudSpace Consulting engineers to design, implement and manage a solu
 
 1) CloudSpace Consulting engineers must ensure that the NAS Financial Group AWS account should be accessible and managed by the following groups.
 
-* CloudSpace engineers
+* CloudSpace engineers ( They should have full admin access except billing to the NAS accounts. )
 
-* NAS Financial Group security team 
+* NAS Financial Group security team ( They should have full admin access with billing
+included to the NAS Financial Group accounts. )
 
-* NAS Financial Group operations team 
+* NAS Financial Group operations team ( They should only have full admin access to deploy
+ONLY in the us-east-1 region and should NOT be able to launch in any other region. )
 
 Each group has specific tasks.
 
