@@ -546,11 +546,11 @@ Outputs:
       Name: Web-app-EC2InstanceProfile
 
   CloudFrontDistribution:
-    Description: The CloudFront Distribution
-    Value: !GetAtt CloudFrontDistribution.Id
+    Description: The DNS name of the CloudFront Distribution
+    Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
       Name: Web-app-CloudFrontDistribution
-
+      
   KMSKey:
     Description: The KMS Key
     Value: !GetAtt KMSKey.Arn
