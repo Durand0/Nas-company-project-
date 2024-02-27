@@ -193,8 +193,8 @@ Resources:
       Name: nascompany.com
       SetIdentifier: Default
       AliasTarget:
-        DNSName: !GetAtt CloudFrontDistribution.Id
-      HostedZoneId: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+      HostedZoneId: !Ref myHostedZone
       GeoLocation: 
         CountryCode: default
       Type: A
